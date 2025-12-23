@@ -3,77 +3,13 @@ import flet as ft
 from ui.layout import page_layout
 from settings_db import get_setting
 from recommend import suggest_recipes
-from recipes_db import init_recipes_db, seed_demo_if_empty, seed_world_recipes, seed_more_world_recipes
-
-# Подробные рецепты по названию блюда.
-# Можно дополнять и редактировать по своему вкусу.
-RECIPE_DETAILS = {
-    "Салат греческий": {
-        "instructions": """\
-1. Подготовьте овощи.
-   Огурцы вымойте, при желании очистите от кожицы и нарежьте крупными полукольцами или крупным кубиком.
-
-2. Нарежьте помидоры.
-   Помидоры вымойте и нарежьте дольками или крупными кусочками.
-
-3. Добавьте лук и маслины.
-   Красный лук нарежьте тонкими полукольцами, маслины оставьте целыми или нарежьте кружочками.
-
-4. Подготовьте сыр.
-   Сыр фета нарежьте кубиками или аккуратно разломайте руками.
-
-5. Соберите салат.
-   Смешайте в миске огурцы, помидоры, лук, маслины и сыр.
-
-6. Заправьте.
-   Полейте оливковым маслом, при желании добавьте немного лимонного сока,
-   слегка посолите, поперчите и посыпьте сухим орегано.
-
-7. Подача.
-   Подавайте салат сразу, пока овощи остаются свежими и хрустящими."""
-    },
-
-    "Салат с тунцом": {
-        "instructions": """\
-1. Отварите яйца вкрутую (8–10 минут), охладите в холодной воде и очистите.
-
-2. Подготовьте огурец.
-   Вымойте и нарежьте его небольшими кубиками.
-
-3. Подготовьте тунец.
-   Откройте банку, слейте жидкость и разомните тунец вилкой.
-
-4. Добавьте кукурузу.
-   Слейте рассол и высыпьте зерна в миску.
-
-5. Нарежьте яйца кубиками и добавьте к остальным ингредиентам.
-
-6. Заправьте салат майонезом (можно смешать майонез с йогуртом),
-   посолите и поперчите по вкусу, аккуратно перемешайте.
-
-7. Подача.
-   Дайте салату немного настояться в холодильнике или подавайте сразу,
-   при желании посыпав его рубленой зеленью."""
-    },
-
-    "Салат с крабовыми палочками": {
-        "instructions": """\
-1. При необходимости разморозьте крабовые палочки и нарежьте их небольшими кубиками.
-
-2. Отварите яйца вкрутую, охладите и нарежьте кубиками.
-
-3. Добавьте консервированную кукурузу, слив рассол из банки.
-
-4. При желании добавьте отварной рис и/или свежий огурец,
-   нарезанный мелким кубиком.
-
-5. Заправьте салат майонезом, посолите по вкусу и хорошо перемешайте.
-
-6. Подача.
-   Переложите салат в салатницу или разложите по порционным тарелкам,
-   украсьте зеленью и подавайте к столу."""
-    },
-}
+from recipes_db import (
+    init_recipes_db,
+    seed_demo_if_empty,
+    seed_world_recipes,
+    seed_more_world_recipes,
+    get_all_recipes,
+)
 
 
 class RecipesView(ft.Container):
@@ -106,12 +42,12 @@ class RecipesView(ft.Container):
             )
             return
 
-        # Инициализация БД рецептов и рекомендаций
         init_recipes_db()
         seed_demo_if_empty()
         seed_world_recipes()
         seed_more_world_recipes()
-
+        all_recipes = get_all_recipes()
+        self.recipes_by_title = {r["title"].strip().lower(): r for r in all_recipes}
         self.items: list[dict] = suggest_recipes(top_n=500)
         self.page_index: int = 0
         self.total_pages: int = max(1, math.ceil(len(self.items) / self.PAGE_SIZE))
@@ -144,8 +80,6 @@ class RecipesView(ft.Container):
             content=page_layout(page, "Рецепты", body),
         )
 
-    # ---------- вспомогательные элементы ----------
-
     def _pill(self, text: str):
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
         bg = "#222B3F" if is_dark else "#F3F4F6"
@@ -159,58 +93,80 @@ class RecipesView(ft.Container):
             content=ft.Text(text, size=12, color=col),
         )
 
-    # ---------- диалог с подробным рецептом ----------
+    def _close_dialog(self, e):
+        if getattr(self.page, "dialog", None):
+            self.page.dialog.open = False
+        self.page.update()
 
-    def _open_recipe_dialog(self, recipe: dict, have: str, missing: str):
-        title = recipe.get("title", "Рецепт")
-        details = RECIPE_DETAILS.get(title)
+    def _format_ingredients(self, ingredients: list[dict]) -> str:
+        if not ingredients:
+            return "—"
+        lines = []
+        for ing in ingredients:
+            name = ing.get("name") or "—"
+            qty = ing.get("qty")
+            unit = ing.get("unit") or ""
+            if qty is None:
+                lines.append(f"• {name}")
+            else:
+                # 50.0 -> 50
+                if isinstance(qty, (int, float)) and float(qty).is_integer():
+                    qty_str = str(int(qty))
+                else:
+                    qty_str = str(qty)
+                lines.append(f"• {name} — {qty_str} {unit}".strip())
+        return "\n".join(lines)
 
-        # Берём шаги из словаря, либо показываем заглушку
-        if details is not None:
-            instructions = details["instructions"]
+    def _open_recipe_dialog(self, title: str, have: str, missing: str):
+        key = (title or "").strip().lower()
+        full = self.recipes_by_title.get(key)
+
+        if full is None:
+            dialog_title = title or "Рецепт"
+            ingredients_text = f"Есть: {have}\nНужно докупить: {missing}"
+            steps_text = "Подробный рецепт не найден в базе (проверь совпадение названий)."
+            time_text = "Время приготовления: —"
+            diff_text = "Сложность: —"
         else:
-            instructions = (
-                "Подробный пошаговый рецепт для этого блюда пока не добавлен.\n\n"
-                f"Имеющиеся продукты: {have}\n"
-                f"Нужно докупить: {missing}"
-            )
-
-        time_text = (
-            f"Время приготовления: {recipe['time_min']} мин"
-            if recipe.get("time_min") is not None
-            else "Время приготовления: —"
-        )
-        diff_text = f"Сложность: {recipe.get('difficulty') or '—'}"
+            dialog_title = full.get("title", title)
+            ingredients_text = self._format_ingredients(full.get("ingredients") or [])
+            steps_text = (full.get("steps") or "").strip() or "Пошаговое описание пока не заполнено."
+            tm = full.get("time_min")
+            time_text = f"Время приготовления: {tm} мин" if tm is not None else "Время приготовления: —"
+            diff_text = f"Сложность: {full.get('difficulty') or '—'}"
 
         dialog = ft.AlertDialog(
             modal=True,
-            title=ft.Text(title, weight="w700"),
-            content=ft.Column(
-                [
-                    ft.Text(time_text),
-                    ft.Text(diff_text),
-                    ft.Divider(),
-                    ft.Text(instructions, selectable=True, size=14),
-                ],
-                tight=True,
-                scroll="auto",
+            title=ft.Text(dialog_title, weight="w700"),
+            content=ft.Container(
+                width=520,
+                height=460,
+                content=ft.Column(
+                    [
+                        ft.Text(time_text),
+                        ft.Text(diff_text),
+                        ft.Divider(),
+                        ft.Text("Ингредиенты:", weight="w700"),
+                        ft.Text(ingredients_text, selectable=True),
+                        ft.Divider(),
+                        ft.Text("Приготовление:", weight="w700"),
+                        ft.Text(steps_text, selectable=True, size=14),
+                    ],
+                    spacing=10,
+                    tight=True,
+                    scroll=ft.ScrollMode.AUTO,
+                ),
             ),
-            actions=[
-                ft.TextButton("Закрыть", on_click=self._close_dialog),
-            ],
+            actions=[ft.TextButton("Закрыть", on_click=self._close_dialog)],
             actions_alignment=ft.MainAxisAlignment.END,
         )
+
+        if dialog not in self.page.overlay:
+            self.page.overlay.append(dialog)
 
         self.page.dialog = dialog
         dialog.open = True
         self.page.update()
-
-    def _close_dialog(self, e):
-        if self.page.dialog:
-            self.page.dialog.open = False
-            self.page.update()
-
-    # ---------- карточка рецепта ----------
 
     def _recipe_card(self, sug: dict) -> ft.Container:
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK
@@ -230,6 +186,8 @@ class RecipesView(ft.Container):
         if r.get("difficulty"):
             meta.append(self._pill(r["difficulty"]))
 
+        title = r.get("title", "Рецепт")
+
         return ft.Container(
             bgcolor=bg,
             border=ft.border.all(1, br),
@@ -239,7 +197,7 @@ class RecipesView(ft.Container):
                 [
                     ft.Row(
                         [
-                            ft.Text(r["title"], size=18, weight="w700", color=text_primary),
+                            ft.Text(title, size=18, weight="w700", color=text_primary),
                             ft.Container(expand=True),
                             *meta,
                         ],
@@ -252,9 +210,7 @@ class RecipesView(ft.Container):
                             ft.ElevatedButton(
                                 "Готовлю",
                                 icon=ft.Icons.RESTAURANT,
-                                on_click=lambda e, rec=r, h=have, m=missing: self._open_recipe_dialog(
-                                    rec, h, m
-                                ),
+                                on_click=lambda e, t=title, h=have, m=missing: self._open_recipe_dialog(t, h, m),
                             )
                         ],
                         spacing=10,
@@ -263,8 +219,6 @@ class RecipesView(ft.Container):
                 spacing=10,
             ),
         )
-
-    # ---------- пагинация ----------
 
     def _render_page(self, initial: bool = False):
         self.cards_column.controls.clear()

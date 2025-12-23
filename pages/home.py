@@ -110,7 +110,6 @@ class HomeView(ft.Container):
             ),
         )
 
-        #Статистика
         self.total_text = ft.Text("—", size=16, weight="w600", color=text_primary)
         self.expired_text = ft.Text("—", size=16, weight="w600", color=text_primary)
         def stat_box(title: str, value_control: ft.Control):
@@ -134,7 +133,6 @@ class HomeView(ft.Container):
             spacing=20,
         )
 
-        #то, что справа
         body = ft.Stack(
             expand=True,
             controls=[
@@ -169,7 +167,6 @@ class HomeView(ft.Container):
             content=page_layout(page, "Welcome back.\nUser", body),
         )
         self._load_stats_and_expiring(initial=True)
-    #Подсчёт и заполнение
     def _parse_date(self, s: str):
         s = (s or "").strip()
         try:

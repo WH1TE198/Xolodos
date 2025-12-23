@@ -1,11 +1,14 @@
 import sys, os, threading, math
 import flet as ft
+
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
+
 from ui.layout import page_layout
 from ui.colors import PILL
 from products_db import init_products_db, list_products, delete_product
+
 
 class SearchView(ft.Container):
     def __init__(self, page: ft.Page):
@@ -15,20 +18,41 @@ class SearchView(ft.Container):
         self._all = list_products(limit=500)
         self._query = ""
         self.is_dark = page.theme_mode == ft.ThemeMode.DARK
+
         self.tile_bg = "#171B26" if self.is_dark else "white"
         self.tile_border = "#2A3042" if self.is_dark else "#CBD5E1"
         self.text_primary = "#E9ECF5" if self.is_dark else "#111827"
         self.text_muted = "#AAB2C8" if self.is_dark else "#6B7280"
         self.delete_color = "#9AB3FF" if self.is_dark else "#1E3A8A"
+
         self.PAGE_SIZE = 5
         self.page_index = 0
         self.total_pages = 1
+
+        # соответствие категорий файлам в assets/img/categories/
+        self.CATEGORY_IMG = {
+            "Овощи": "img/categories/Овощи.png",
+            "Фрукты": "img/categories/Фрукты.png",
+            "Молочное": "img/categories/Молочное.png",
+            "Мясо": "img/categories/Мясо.png",
+            "Морепродукты": "img/categories/Морепродукты.png",
+            "Напитки": "img/categories/Напитки.png",
+            "Выпечка": "img/categories/Выпечка.png",
+            "Соусы/Специи": "img/categories/Соусы_Специи.png",
+            "Крупы/Макароны": "img/categories/Крупы_Макароны.png",
+            "Консервы": "img/categories/Консервы.png",
+            "Другое": "img/categories/Другое.png",
+        }
+        self.DEFAULT_CAT_IMG = "img/categories/default.png"
+
         def show_toast(msg: str, duration_ms: int = 1600):
             bg = "#16a34a"
+
             def close_toast(_=None):
                 if wrapper in page.overlay:
                     page.overlay.remove(wrapper)
                     page.update()
+
             toast = ft.Container(
                 width=320,
                 bgcolor=bg,
@@ -50,13 +74,16 @@ class SearchView(ft.Container):
             t = threading.Timer(duration_ms / 1000.0, close_toast)
             t.daemon = True
             t.start()
+
         self._toast = show_toast
+
         self.search = ft.TextField(
             label="Поиск",
             hint_text="Введите название, категорию или дату",
             width=1000,
             on_change=self._on_search_change,
         )
+
         add_btn = ft.ElevatedButton(
             "Добавить",
             icon=ft.Icons.ADD,
@@ -70,39 +97,54 @@ class SearchView(ft.Container):
             ),
             on_click=lambda _: page.go("/add"),
         )
+
         top = ft.Row([self.search, add_btn], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+
         self.listview = ft.ListView(expand=True, spacing=14, padding=0)
+
         self.prev_btn = ft.OutlinedButton("Назад", icon=ft.Icons.CHEVRON_LEFT, on_click=self._prev_page)
         self.next_btn = ft.OutlinedButton("Вперёд", icon=ft.Icons.CHEVRON_RIGHT, on_click=self._next_page)
         self.page_label = ft.Text("", size=13, color=self.text_muted)
+
         pager = ft.Row(
             [self.prev_btn, self.page_label, self.next_btn],
             spacing=10,
             alignment=ft.MainAxisAlignment.END,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
+
         self._render_list(initial=True)
+
         body = ft.Column([top, ft.Container(height=8), self.listview, ft.Container(height=8), pager], expand=True)
+
         super().__init__(
             expand=True,
             bgcolor=page.bgcolor,
             content=page_layout(page, "Поиск", body),
         )
+
+    def _cat_src(self, category: str | None) -> str:
+        cat = (category or "").strip()
+        return self.CATEGORY_IMG.get(cat, self.DEFAULT_CAT_IMG)
+
     def _on_search_change(self, e: ft.ControlEvent):
         self._query = (self.search.value or "").strip().lower()
         self.page_index = 0
         self._render_list()
         self.listview.update()
+
     def _filter_items(self):
         if not self._query:
             return self._all
         q = self._query
         return [
-            p for p in self._all
+            p
+            for p in self._all
             if (p["name"] or "").lower().find(q) >= 0
             or (p["category"] or "").lower().find(q) >= 0
             or (p["exp_date"] or "").lower().find(q) >= 0
         ]
+
     def _update_pager_controls(self, total_items: int):
         self.total_pages = max(1, math.ceil(total_items / self.PAGE_SIZE))
         if self.page_index >= self.total_pages:
@@ -110,16 +152,20 @@ class SearchView(ft.Container):
         if self.page_index < 0:
             self.page_index = 0
         self.page_label.value = f"{self.page_index + 1} / {self.total_pages}"
-        self.prev_btn.disabled = (self.page_index == 0)
-        self.next_btn.disabled = (self.page_index >= self.total_pages - 1)
+        self.prev_btn.disabled = self.page_index == 0
+        self.next_btn.disabled = self.page_index >= self.total_pages - 1
+
     def _render_list(self, initial: bool = False):
         self._all = list_products(limit=500)
         items = self._filter_items()
+
         self._update_pager_controls(len(items))
         start = self.page_index * self.PAGE_SIZE
         end = start + self.PAGE_SIZE
         page_slice = items[start:end]
+
         self.listview.controls.clear()
+
         if not items:
             self.listview.controls.append(
                 ft.Container(
@@ -151,15 +197,14 @@ class SearchView(ft.Container):
             self._render_list()
 
     def _product_tile(self, p: dict) -> ft.Container:
-        left_icon = ft.Container(
-            width=52,
-            height=52,
-            bgcolor=("#222B3F" if self.is_dark else "#EEF2FF"),
-            border=ft.border.all(2, ("#32405A" if self.is_dark else "#C7D2FE")),
-            border_radius=12,
-            alignment=ft.alignment.center,
-            content=ft.Icon(ft.Icons.IMAGE, color=("#AAB2C8" if self.is_dark else "#64748B")),
-        )
+        left_icon = ft.Image(
+        src=self._cat_src(p.get("category")),
+        width=52,
+        height=52,
+        fit=ft.ImageFit.COVER,
+    )
+
+
         name = ft.Text(p["name"] or "—", size=16, weight="w600", color=self.text_primary)
         sub = ft.Text(f"До {p['exp_date'] or '—'}", size=12, color=self.text_muted)
 
@@ -169,11 +214,13 @@ class SearchView(ft.Container):
             icon_color=self.delete_color,
             on_click=lambda _: self._delete_now(p),
         )
+
         row = ft.Row(
             [left_icon, ft.Column([name, sub], spacing=2, expand=True), delete_btn],
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         )
+
         return ft.Container(
             bgcolor=self.tile_bg,
             border=ft.border.all(2, self.tile_border),
@@ -181,6 +228,7 @@ class SearchView(ft.Container):
             padding=12,
             content=row,
         )
+
     def _delete_now(self, p: dict):
         try:
             delete_product(p["id"])

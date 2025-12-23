@@ -8,37 +8,38 @@ if PROJECT_ROOT not in sys.path:
 
 from ui.layout import page_layout
 from products_db import init_products_db, insert_product
+from ui.product_catalog import PRODUCT_CATEGORIES, category_options, product_options
 
 
-#Страница "Добавить продукт"
 class AddProductView(ft.Container):
     def __init__(self, page: ft.Page):
         init_products_db()
-        name = ft.TextField(label="Название продукта", width=420)
+
         cat = ft.Dropdown(
             label="Категория",
             width=420,
             hint_text="Выберите категорию",
-            options=[
-                ft.dropdown.Option("Овощи"),
-                ft.dropdown.Option("Фрукты"),
-                ft.dropdown.Option("Молочное"),
-                ft.dropdown.Option("Мясо"),
-                ft.dropdown.Option("Морепродукты"),
-                ft.dropdown.Option("Напитки"),
-                ft.dropdown.Option("Выпечка"),
-                ft.dropdown.Option("Соусы/Специи"),
-                ft.dropdown.Option("Другое"),
-            ],
+            options=category_options(),
+        )
+
+        name_dd = ft.Dropdown(
+            label="Продукт",
+            width=420,
+            hint_text="Сначала выберите категорию",
+            options=[],
+            disabled=True,
         )
 
         exp = ft.TextField(label="Срок годности до (ДД.ММ.ГГГГ)", width=420)
+
         def show_toast(msg: str, duration_ms: int = 1800):
             bg = "#16a34a"
+
             def close_toast(_=None):
                 if wrapper in page.overlay:
                     page.overlay.remove(wrapper)
                     page.update()
+
             toast = ft.Container(
                 width=360,
                 bgcolor=bg,
@@ -60,6 +61,7 @@ class AddProductView(ft.Container):
             t = threading.Timer(duration_ms / 1000.0, close_toast)
             t.daemon = True
             t.start()
+
         def valid_date(s: str) -> bool:
             s = (s or "").strip()
             try:
@@ -67,42 +69,78 @@ class AddProductView(ft.Container):
                 return True
             except Exception:
                 return False
+
+        def on_category_change(_):
+            category = (cat.value or "").strip()
+
+            name_dd.value = None
+            name_dd.options = product_options(category)
+            name_dd.disabled = (not category)
+
+            if category:
+                name_dd.hint_text = "Выберите продукт"
+            else:
+                name_dd.hint_text = "Сначала выберите категорию"
+
+            page.update()
+
+        cat.on_change = on_category_change
+
         def on_save(_):
-            data = {
-                "name": (name.value or "").strip(),
-                "category": (cat.value or "") or "",
-                "exp_date": (exp.value or "").strip(),
-            }
-            if not data["name"]:
-                show_toast("Укажи название")
+            category = (cat.value or "").strip()
+            product_name = (name_dd.value or "").strip()
+            exp_date = (exp.value or "").strip()
+
+            if not category:
+                show_toast("Выбери категорию")
                 return
-            if not valid_date(data["exp_date"]):
+
+            if category not in PRODUCT_CATEGORIES:
+                show_toast("Некорректная категория")
+                return
+
+            if not product_name:
+                show_toast("Выбери продукт")
+                return
+
+            if not valid_date(exp_date):
                 show_toast("Дата: ДД.ММ.ГГГГ")
                 return
 
+            data = {"name": product_name, "category": category, "exp_date": exp_date}
             new_id = insert_product(data)
+
             show_toast(f"Продукт сохранён (id={new_id})")
-            name.value = ""
+
             cat.value = None
+            name_dd.value = None
+            name_dd.options = []
+            name_dd.disabled = True
+            name_dd.hint_text = "Сначала выберите категорию"
             exp.value = ""
             page.update()
+
             def go_back():
                 page.go("/search")
+
             t = threading.Timer(0.5, go_back)
             t.daemon = True
             t.start()
+
         save_btn = ft.ElevatedButton("Сохранить", icon=ft.Icons.SAVE, on_click=on_save)
         cancel_btn = ft.OutlinedButton("Отмена", icon=ft.Icons.CLOSE, on_click=lambda _: page.go("/search"))
+
         form = ft.Column(
             [
                 ft.Text("Добавить продукт", size=22, weight="bold"),
-                name,
                 cat,
+                name_dd,
                 exp,
                 ft.Row([save_btn, cancel_btn], spacing=10),
             ],
             spacing=12,
         )
+
         super().__init__(
             expand=True,
             bgcolor=page.bgcolor,
