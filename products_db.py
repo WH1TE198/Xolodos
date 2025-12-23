@@ -1,4 +1,3 @@
-# products_db.py
 import sqlite3
 from contextlib import closing
 

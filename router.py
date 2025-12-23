@@ -1,4 +1,3 @@
-# router.py
 from pages.home import HomeView
 from pages.search import SearchView
 from pages.settings import SettingsView
@@ -6,14 +5,12 @@ from pages.user import UserView
 from pages.add_product import AddProductView
 from pages.expiring import ExpiringView
 from pages.recipes import RecipesView
-# from pages.not_found import NotFoundView  # если есть страница 404
 
 class Router:
     def __init__(self, page):
         self.page = page
-
     def resolve(self, route: str):
-        # на всякий случай нормализуем
+
         r = (route or "/").strip()
 
         if r in ("/", "/home"):
