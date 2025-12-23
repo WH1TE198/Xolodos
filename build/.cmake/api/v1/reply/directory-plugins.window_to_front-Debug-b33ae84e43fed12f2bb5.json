@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "plugins/window_to_front",
+		"source" : "flutter/ephemeral/.plugin_symlinks/window_to_front/windows"
+	}
+}

@@ -1,0 +1,14 @@
+{
+	"InstallScripts" : 
+	[
+		"C:/Xolodos/build/cmake_install.cmake",
+		"C:/Xolodos/build/flutter/cmake_install.cmake",
+		"C:/Xolodos/build/runner/cmake_install.cmake",
+		"C:/Xolodos/build/plugins/screen_retriever_windows/cmake_install.cmake",
+		"C:/Xolodos/build/plugins/serious_python_windows/cmake_install.cmake",
+		"C:/Xolodos/build/plugins/url_launcher_windows/cmake_install.cmake",
+		"C:/Xolodos/build/plugins/window_manager/cmake_install.cmake",
+		"C:/Xolodos/build/plugins/window_to_front/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
